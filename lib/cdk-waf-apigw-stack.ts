@@ -1,16 +1,66 @@
 import * as cdk from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as apigw from 'aws-cdk-lib/aws-apigateway';
+import * as waf from 'aws-cdk-lib/aws-wafv2';
+import {aws_lambda_nodejs as lambdaNodejs} from "aws-cdk-lib"; 
 import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+
 
 export class CdkWafApigwStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // The code that defines your stack goes here
+    const fn = new lambdaNodejs.NodejsFunction(this, 'pingHandler',{
+      entry: "lambda/index.ts",
+      handler: "handler",
+      runtime: lambda.Runtime.NODEJS_16_X,
+    });
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'CdkWafApigwQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
+    // APIgw
+    const restApi = new apigw.RestApi(this, "restApi", {
+      restApiName: "restApi"
+    });
+    restApi.root.addMethod("GET", new apigw.LambdaIntegration(fn));
+
+    // WAF web acl
+    const webAcl = new waf.CfnWebACL(this, "wafV2WebAcl", {
+      defaultAction: {
+        allow: {}
+      },
+      scope: "REGIONAL",
+      visibilityConfig:{
+        cloudWatchMetricsEnabled: true,
+        sampledRequestsEnabled: true,
+        metricName: "wafV2WebAcl",
+      },
+      rules: [
+        {
+          name: "AWSManagedRulesCommonRuleSet",
+          priority: 1,
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: "AWS",
+              name: "AWSManagedRulesCommonRuleSet",
+            },
+          },
+          overrideAction: { none: {} },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            sampledRequestsEnabled: true,
+            metricName: "AWSManagedRulesCommonRuleSet",
+          },
+        },
+      ],
+    });
+
+    // ApigwとwebACLの紐づけ
+    const webAclAssociation = new waf.CfnWebACLAssociation(this, "WebAclAssociation",
+    {
+      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${restApi.restApiId}/stages/dev`,
+      webAclArn: webAcl.attrArn,
+    });
+
+    webAclAssociation.addDependsOn(webAcl);
+    webAclAssociation.addDependsOn(restApi.deploymentStage.node.defaultChild as cdk.CfnResource);
   }
 }
