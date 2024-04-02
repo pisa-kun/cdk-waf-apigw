@@ -18,7 +18,11 @@ export class CdkWafApigwStack extends cdk.Stack {
 
     // APIgw
     const restApi = new apigw.RestApi(this, "restApi", {
-      restApiName: "restApi"
+      restApiName: "restApi",
+      // 必要な要素
+      deployOptions: {
+        stageName: "dev",
+      },
     });
     restApi.root.addMethod("GET", new apigw.LambdaIntegration(fn));
 

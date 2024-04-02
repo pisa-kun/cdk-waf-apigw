@@ -5,8 +5,36 @@
 
 > npm install @types/aws-lambda esbuild --save-dev
 
-2. S3へのログの出力
+deployOptions.stageNameを含めるのがミソらしい。
+```ts
+    // APIgw
+    const restApi = new apigw.RestApi(this, "restApi", {
+      restApiName: "restApi",
+      // 必要な要素
+      deployOptions: {
+        stageName: "dev",
+      },
+    });
 
+    // APIGWとWebACLを紐付ける
+    const webAclAssociation = new cdk.aws_wafv2.CfnWebACLAssociation(
+      this,
+      "webAclAssociation",
+      {
+        // resourceArnにstages/devまで含める
+        resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${restApi.restApiId}/stages/dev`,
+        webAclArn: webAcl.attrArn,
+      }
+    )
+    webAclAssociation.addDependsOn(webAcl)
+    webAclAssociation.addDependsOn(restApi.node.defaultChild as cdk.CfnResource)
+```
+
+2. S3へのログの出力
+https://zenn.dev/dyoshikawa/articles/fe1ae6743db0b7
+
+3. cloudwatchへのログの出力
+https://dev.classmethod.jp/articles/output-requestlog-cloudwatch-aws-waf-api-gateway-count-mode/
 
 参考:  
 https://zenn.dev/dyoshikawa/articles/fe1ae6743db0b7
